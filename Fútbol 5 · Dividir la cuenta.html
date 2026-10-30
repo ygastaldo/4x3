@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fútbol 5 · Dividir la cuenta</title>
+<style>
+:root{--bg:#f4f6f3;--card:#fff;--tx:#17211a;--mut:#667068;--br:#dfe5dd;--ac:#1f8f4e;--ac2:#e8f5ec;--wa:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121613;--card:#1b211d;--tx:#eaf0ea;--mut:#98a39b;--br:#2c352f;--ac:#3ecf7a;--ac2:#1d2e23;--wa:#ff8a80;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121613;--card:#1b211d;--tx:#eaf0ea;--mut:#98a39b;--br:#2c352f;--ac:#3ecf7a;--ac2:#1d2e23;--wa:#ff8a80;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:1.5rem;margin:8px 0 2px}
+p.s{color:var(--mut);margin:0 0 16px;font-size:.92rem}
+section{background:var(--card);border:1px solid var(--br);border-radius:14px;padding:16px;margin-bottom:14px}
+h2{font-size:1.05rem;margin:0 0 4px}
+.h{color:var(--mut);font-size:.85rem;margin:0 0 12px}
+.row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+input,select,button{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--br);border-radius:10px;padding:10px;min-width:0}
+input[type=text]{flex:1}
+input.n{width:120px;text-align:right}
+select{flex:0 1 190px}
+input:disabled{opacity:.7;font-style:italic}
+button{cursor:pointer}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+button.x{color:var(--wa);padding:10px 12px}
+.tot{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.tot label{color:var(--mut);font-size:.85rem;flex:1 1 220px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:9px 6px;border-bottom:1px solid var(--br);font-size:.95rem}
+td.r,th.r{text-align:right;white-space:nowrap}
+td small{display:block;color:var(--mut);font-size:.78rem}
+td.b{font-weight:700;color:var(--ac)}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.sum div{flex:1 1 140px;background:var(--ac2);border-radius:10px;padding:10px}
+.sum b{display:block;font-size:1.1rem}
+.sum span{color:var(--mut);font-size:.8rem}
+.warn{color:var(--wa);font-size:.88rem;margin-top:8px}
+.rt{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.rt label{color:var(--mut);font-size:.85rem}
+</style>
+</head>
+<body>
+<main>
+<h1>⚽ Fútbol 5 · Dividir la cuenta</h1>
+<p class="s">Cargá los momentos de la noche con su monto, anotá quién se fue en cada uno y el total se reparte solo.</p>
+
+<section>
+<h2>1. Momentos y montos</h2>
+<p class="h">Cada momento lo pagan solo los que todavía estaban presentes. Los valores son editables y quedan guardados.</p>
+<div id="mom"></div>
+<button onclick="addM()">+ Agregar momento</button>
+<div class="tot">
+<label for="tt">Total de la cuenta (opcional): si lo cargás, el último momento se calcula como resto.</label>
+<input id="tt" class="n" type="number" min="0" inputmode="decimal" placeholder="$ total">
+</div>
+</section>
+
+<section>
+<h2>2. Jugadores</h2>
+<p class="h">Elegí después de qué momento se fue cada uno (el último momento es quedarse hasta el final).</p>
+<div id="pl"></div>
+<div class="row">
+<input id="nn" type="text" placeholder="Nombre del jugador" onkeydown="if(event.key==='Enter')addP()">
+<button class="p" onclick="addP()">Agregar</button>
+</div>
+</section>
+
+<section>
+<h2>3. Cuánto paga cada uno</h2>
+<div class="scroll"><table><thead><tr><th>Jugador</th><th class="r">Debe pagar</th></tr></thead><tbody id="res"></tbody></table></div>
+<div class="rt"><label for="rd">Redondear hacia arriba a:</label>
+<select id="rd"><option value="0">Sin redondeo</option><option value="10">$10</option><option value="50">$50</option><option value="100">$100</option></select></div>
+<div class="sum" id="sum"></div>
+<div class="warn" id="warn"></div>
+<div class="rt"><button class="p" onclick="copiar()">Copiar resumen</button><span id="ok" class="h" style="margin:0"></span></div>
+<div class="rt"><button onclick="reset()">Nueva noche (borrar jugadores)</button></div>
+</section>
+</main>
+<script>
+const KEY='futbol5-cuenta-v1';
+const fm=new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:2});
+const $=s=>document.getElementById(s);
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S={mom:[{n:'Cancha',a:0},{n:'Bebidas',a:0},{n:'Cuenta final',a:0}],pl:[],total:'',round:0};
+try{const l=JSON.parse(localStorage.getItem(KEY));if(l&&l.mom&&l.pl)S=l}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function amounts(){
+  const m=S.mom.map(x=>+x.a||0),t=+S.total||0;
+  if(t>0&&m.length){const rest=m.slice(0,-1).reduce((a,b)=>a+b,0);m[m.length-1]=Math.max(0,t-rest)}
+  return m;
+}
+function drawM(){
+  $('mom').innerHTML=S.mom.map((x,i)=>`<div class="row"><input type="text" value="${esc(x.n)}" oninput="S.mom[${i}].n=this.value;opts();calc()" aria-label="Nombre del momento"><input class="n" id="a${i}" type="number" min="0" inputmode="decimal" value="${x.a||''}" placeholder="$ 0" oninput="S.mom[${i}].a=this.value;calc()" aria-label="Monto"><button class="x" onclick="delM(${i})" aria-label="Quitar">✕</button></div>`).join('');
+}
+function drawP(){
+  $('pl').innerHTML=S.pl.map((p,i)=>`<div class="row"><input type="text" value="${esc(p.n)}" oninput="S.pl[${i}].n=this.value;calc()" aria-label="Jugador"><select id="e${i}" onchange="S.pl[${i}].e=+this.value;calc()" aria-label="Se fue después de"></select><button class="x" onclick="delP(${i})" aria-label="Quitar">✕</button></div>`).join('');
+  opts();
+}
+function opts(){
+  S.pl.forEach((p,i)=>{const s=$('e'+i);if(!s)return;
+    s.innerHTML=S.mom.map((m,j)=>`<option value="${j}"${p.e===j?' selected':''}>${j===S.mom.length-1?'Hasta el final · ':'Se fue tras: '}${esc(m.n||'Momento '+(j+1))}</option>`).join('')});
+}
+function addM(){const l=S.mom.pop();S.mom.push({n:'Nuevo momento',a:0});if(l)S.mom.push(l);drawM();drawP();calc()}
+function delM(i){if(S.mom.length<2)return;S.mom.splice(i,1);S.pl.forEach(p=>{if(p.e>=S.mom.length)p.e=S.mom.length-1});drawM();drawP();calc()}
+function addP(){const v=$('nn').value.trim();if(!v)return;S.pl.push({n:v,e:S.mom.length-1});$('nn').value='';drawP();calc();$('nn').focus()}
+function delP(i){S.pl.splice(i,1);drawP();calc()}
+function reset(){if(confirm('¿Borrar los jugadores y empezar una nueva noche? Los montos se conservan.')){S.pl=[];drawP();calc()}}
+let rows=[];
+function calc(){
+  const m=amounts(),t=+S.total||0,r=+S.round||0;
+  const last=S.mom.length-1,la=$('a'+last);
+  if(la){la.disabled=t>0;if(t>0)la.value=m[last]}
+  S.mom.forEach((x,i)=>{const e=$('a'+i);if(e&&i!==last)e.disabled=false});
+  let un=0;const tot=S.pl.map(()=>({t:0,d:[]}));
+  m.forEach((a,i)=>{
+    const ids=S.pl.map((p,k)=>p.e>=i?k:-1).filter(k=>k>=0);
+    if(!ids.length){un+=a;return}
+    ids.forEach(k=>{const s=a/ids.length;tot[k].t+=s;if(s>0)tot[k].d.push(S.mom[i].n+' '+fm.format(s))});
+  });
+  rows=S.pl.map((p,k)=>{let v=tot[k].t;if(r>0)v=Math.ceil(v/r-1e-9)*r;else v=Math.round(v*100)/100;return{n:p.n||'(sin nombre)',v,d:tot[k].d}});
+  $('res').innerHTML=rows.length?rows.map(x=>`<tr><td>${esc(x.n)}<small>${esc(x.d.join(' · '))}</small></td><td class="r b">${fm.format(x.v)}</td></tr>`).join(''):'<tr><td colspan="2" class="h">Agregá jugadores para ver el reparto.</td></tr>';
+  const spent=m.reduce((a,b)=>a+b,0),coll=rows.reduce((a,b)=>a+b.v,0);
+  $('sum').innerHTML=`<div><span>Total gastado</span><b>${fm.format(spent)}</b></div><div><span>Total a cobrar</span><b>${fm.format(coll)}</b></div><div><span>Diferencia</span><b>${fm.format(coll-spent+un*0)}</b></div>`;
+  $('warn').textContent=un>0?'⚠ '+fm.format(un)+' no tienen a nadie asignado: nadie se quedó en ese momento. Revisá a qué momento se fue cada jugador.':(t>0&&S.mom.slice(0,-1).reduce((a,x)=>a+(+x.a||0),0)>t?'⚠ Los momentos anteriores superan el total de la cuenta.':'');
+  S.total=$('tt').value;S.round=+$('rd').value;save();
+}
+function copiar(){
+  const d=new Date().toLocaleDateString('es-AR');
+  const txt='Fútbol 5 · '+d+'\n'+rows.map(x=>x.n+': '+fm.format(x.v)).join('\n');
+  const ok=()=>{$('ok').textContent='¡Copiado!';setTimeout(()=>$('ok').textContent='',2000)};
+  const fb=()=>{const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand('copy');ok()}catch(e){}t.remove()};
+  try{navigator.clipboard.writeText(txt).then(ok,fb)}catch(e){fb()}
+}
+$('tt').value=S.total||'';$('rd').value=S.round||0;
+$('tt').addEventListener('input',()=>{S.total=$('tt').value;calc()});
+$('rd').addEventListener('change',calc);
+drawM();drawP();calc();
+</script>
+</body>
+</html>
