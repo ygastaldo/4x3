@@ -16,11 +16,11 @@ p.s{color:var(--mut);margin:0 0 16px;font-size:.92rem}
 section{background:var(--card);border:1px solid var(--br);border-radius:14px;padding:16px;margin-bottom:14px}
 h2{font-size:1.05rem;margin:0 0 4px}
 .h{color:var(--mut);font-size:.85rem;margin:0 0 12px}
-.row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+.row{display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap}
 input,select,button{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--br);border-radius:10px;padding:10px;min-width:0}
-input[type=text]{flex:1}
+input[type=text]{flex:1 1 140px}
 input.n{width:120px;text-align:right}
-select{flex:0 1 190px}
+select{flex:1 1 170px;max-width:260px}
 input:disabled{opacity:.7;font-style:italic}
 button{cursor:pointer}
 button.p{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
@@ -60,7 +60,7 @@ td.b{font-weight:700;color:var(--ac)}
 
 <section>
 <h2>2. Jugadores</h2>
-<p class="h">Elegí después de qué momento se fue cada uno (el último momento es quedarse hasta el final).</p>
+<p class="h">Elegí después de qué momento se fue cada uno (el último momento es quedarse hasta el final). Si querés, fijá un aporte manual: ese jugador paga exactamente ese monto, que se descuenta de los momentos en los que estuvo, y el resto de cada momento se divide entre los demás jugadores presentes.</p>
 <div id="pl"></div>
 <div class="row">
 <input id="nn" type="text" placeholder="Nombre del jugador" onkeydown="if(event.key==='Enter')addP()">
@@ -96,7 +96,7 @@ function drawM(){
   $('mom').innerHTML=S.mom.map((x,i)=>`<div class="row"><input type="text" value="${esc(x.n)}" oninput="S.mom[${i}].n=this.value;opts();calc()" aria-label="Nombre del momento"><input class="n" id="a${i}" type="number" min="0" inputmode="decimal" value="${x.a||''}" placeholder="$ 0" oninput="S.mom[${i}].a=this.value;calc()" aria-label="Monto"><button class="x" onclick="delM(${i})" aria-label="Quitar">✕</button></div>`).join('');
 }
 function drawP(){
-  $('pl').innerHTML=S.pl.map((p,i)=>`<div class="row"><input type="text" value="${esc(p.n)}" oninput="S.pl[${i}].n=this.value;calc()" aria-label="Jugador"><select id="e${i}" onchange="S.pl[${i}].e=+this.value;calc()" aria-label="Se fue después de"></select><button class="x" onclick="delP(${i})" aria-label="Quitar">✕</button></div>`).join('');
+  $('pl').innerHTML=S.pl.map((p,i)=>`<div class="row"><input type="text" value="${esc(p.n)}" oninput="S.pl[${i}].n=this.value;calc()" aria-label="Jugador"><select id="e${i}" onchange="S.pl[${i}].e=+this.value;calc()" aria-label="Se fue después de"></select><input class="n" style="width:120px" type="number" min="0" inputmode="decimal" value="${p.f||''}" placeholder="Aporte $" title="Aporte fijo (opcional)" oninput="S.pl[${i}].f=this.value;calc()" aria-label="Aporte fijo manual"><button class="x" onclick="delP(${i})" aria-label="Quitar">✕</button></div>`).join('');
   opts();
 }
 function opts(){
@@ -105,7 +105,7 @@ function opts(){
 }
 function addM(){const l=S.mom.pop();S.mom.push({n:'Nuevo momento',a:0});if(l)S.mom.push(l);drawM();drawP();calc()}
 function delM(i){if(S.mom.length<2)return;S.mom.splice(i,1);S.pl.forEach(p=>{if(p.e>=S.mom.length)p.e=S.mom.length-1});drawM();drawP();calc()}
-function addP(){const v=$('nn').value.trim();if(!v)return;S.pl.push({n:v,e:S.mom.length-1});$('nn').value='';drawP();calc();$('nn').focus()}
+function addP(){const v=$('nn').value.trim();if(!v)return;S.pl.push({n:v,e:S.mom.length-1,f:''});$('nn').value='';drawP();calc();$('nn').focus()}
 function delP(i){S.pl.splice(i,1);drawP();calc()}
 function reset(){if(confirm('¿Borrar los jugadores y empezar una nueva noche? Los montos se conservan.')){S.pl=[];drawP();calc()}}
 let rows=[];
@@ -114,17 +114,25 @@ function calc(){
   const last=S.mom.length-1,la=$('a'+last);
   if(la){la.disabled=t>0;if(t>0)la.value=m[last]}
   S.mom.forEach((x,i)=>{const e=$('a'+i);if(e&&i!==last)e.disabled=false});
-  let un=0;const tot=S.pl.map(()=>({t:0,d:[]}));
+  let un=0,over=false;const tot=S.pl.map(()=>({t:0,d:[]}));
+  const fx=S.pl.map(p=>(p.f!==''&&p.f!=null&&!isNaN(+p.f))?+p.f:null);
+  const pres=m.map((a,i)=>S.pl.map((p,k)=>p.e>=i?k:-1).filter(k=>k>=0));
+  const cr=m.map(()=>0);
+  S.pl.forEach((p,k)=>{if(fx[k]===null)return;
+    const w=m.map((a,i)=>p.e>=i&&pres[i].length?a/pres[i].length:0),sw=w.reduce((x,y)=>x+y,0);
+    w.forEach((x,i)=>{if(p.e>=i)cr[i]+=sw>0?fx[k]*x/sw:fx[k]/(p.e+1)});
+    tot[k].t=fx[k];tot[k].d.push('Aporte fijo');
+  });
   m.forEach((a,i)=>{
-    const ids=S.pl.map((p,k)=>p.e>=i?k:-1).filter(k=>k>=0);
+    const ids=pres[i].filter(k=>fx[k]===null);const a0=a;a=Math.max(0,a-cr[i]);if(a0-cr[i]<-0.005)over=true;
     if(!ids.length){un+=a;return}
     ids.forEach(k=>{const s=a/ids.length;tot[k].t+=s;if(s>0)tot[k].d.push(S.mom[i].n+' '+fm.format(s))});
   });
-  rows=S.pl.map((p,k)=>{let v=tot[k].t;if(r>0)v=Math.ceil(v/r-1e-9)*r;else v=Math.round(v*100)/100;return{n:p.n||'(sin nombre)',v,d:tot[k].d}});
+  rows=S.pl.map((p,k)=>{let v=tot[k].t;if(fx[k]===null){if(r>0)v=Math.ceil(v/r-1e-9)*r;else v=Math.round(v*100)/100}return{n:p.n||'(sin nombre)',v,d:tot[k].d}});
   $('res').innerHTML=rows.length?rows.map(x=>`<tr><td>${esc(x.n)}<small>${esc(x.d.join(' · '))}</small></td><td class="r b">${fm.format(x.v)}</td></tr>`).join(''):'<tr><td colspan="2" class="h">Agregá jugadores para ver el reparto.</td></tr>';
   const spent=m.reduce((a,b)=>a+b,0),coll=rows.reduce((a,b)=>a+b.v,0);
   $('sum').innerHTML=`<div><span>Total gastado</span><b>${fm.format(spent)}</b></div><div><span>Total a cobrar</span><b>${fm.format(coll)}</b></div><div><span>Diferencia</span><b>${fm.format(coll-spent+un*0)}</b></div>`;
-  $('warn').textContent=un>0?'⚠ '+fm.format(un)+' no tienen a nadie asignado: nadie se quedó en ese momento. Revisá a qué momento se fue cada jugador.':(t>0&&S.mom.slice(0,-1).reduce((a,x)=>a+(+x.a||0),0)>t?'⚠ Los momentos anteriores superan el total de la cuenta.':'');
+  $('warn').textContent=un>0?'⚠ '+fm.format(un)+' sin repartir: ningún jugador sin aporte fijo se quedó en ese momento. Revisá la salida de cada jugador o los aportes fijos.':over?'⚠ Un aporte fijo supera lo que correspondía a ese momento; los demás jugadores no pagan ese tramo.':(t>0&&S.mom.slice(0,-1).reduce((a,x)=>a+(+x.a||0),0)>t?'⚠ Los momentos anteriores superan el total de la cuenta.':'');
   S.total=$('tt').value;S.round=+$('rd').value;save();
 }
 function copiar(){
